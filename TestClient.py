@@ -15,10 +15,18 @@ def audio_stream():
 
     mode = 'get'
     audio_get, context = ps.audioCapture(mode=mode)
+    mode = 'send'
+    audio_send, context = ps.audioCapture(mode=mode)
 
     data = b""
     payload_size = struct.calcsize("Q")
     while True:
+        # Send audio
+        frame = audio_send.get()
+        a = pickle.dumps(frame)
+        message = struct.pack("Q", len(a)) + a
+        client_socket.sendall(message)
+        # Receive audio
         while len(data) < payload_size:
             packet = client_socket.recv(4 * 1024)  # 4K
             if not packet:
@@ -52,6 +60,14 @@ def video_stream():
         data = b""
         payload_size = struct.calcsize("Q")
         while vid.isOpened() and client_socket:
+            # Send video
+            img, frame = vid.read()
+            frame = imutils.resize(frame, width=320)
+            a = pickle.dumps(frame)
+            message = struct.pack("Q", len(a)) + a
+            client_socket.sendall(message)
+            cv2.imshow("TRANSMITTING VIDEO", frame)
+            # Receive video
             while len(data) < payload_size:
                 packet = client_socket.recv(4 * 1024)  # 4K
                 if not packet:

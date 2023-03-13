@@ -17,10 +17,32 @@ def audio_stream():
     client_socket, addr = server_socket.accept()
     print('GOT (audio) CONNECTION FROM:', addr)
 
+    mode = 'get'
+    audio_get, context = ps.audioCapture(mode=mode)
     mode = 'send'
     audio_send, context = ps.audioCapture(mode=mode)
 
+    data = b""
+    payload_size = struct.calcsize("Q")
     while True:
+        # Receive audio
+        while len(data) < payload_size:
+            packet = client_socket.recv(4 * 1024)  # 4K
+            if not packet:
+                break
+            data += packet
+        packed_msg_size = data[:payload_size]
+        data = data[payload_size:]
+        msg_size = struct.unpack("Q", packed_msg_size)[0]
+
+        while len(data) < msg_size:
+            data += client_socket.recv(4 * 1024)
+        frame_data = data[:msg_size]
+        data = data[msg_size:]
+        frame = pickle.loads(frame_data)
+        audio_get.put(frame)
+
+        # Send audio
         frame = audio_send.get()
         a = pickle.dumps(frame)
         message = struct.pack("Q", len(a)) + a
@@ -42,11 +64,28 @@ def video_stream():
     client_socket, addr = server_socket.accept()
     print('GOT (video) CONNECTION FROM:', addr)
 
+    data = b""
+    payload_size = struct.calcsize("Q")
     if client_socket:
         vid = cv2.VideoCapture(0)  # Запись видео
 
         while vid.isOpened() and client_socket:
-            # Отправка видео
+            # Receive video
+            while len(data) < payload_size:
+                packet = client_socket.recv(4 * 1024)  # 4K
+                if not packet:
+                    break
+                data += packet
+            packed_msg_size = data[:payload_size]
+            data = data[payload_size:]
+            msg_size = struct.unpack("Q", packed_msg_size)[0]
+            while len(data) < msg_size:
+                data += client_socket.recv(4 * 1024)
+            frame_data = data[:msg_size]
+            data = data[msg_size:]
+            frame = pickle.loads(frame_data)
+            cv2.imshow("RECEIVING VIDEO", frame)
+            # Send video
             img, frame = vid.read()
             frame = imutils.resize(frame, width=320)
             a = pickle.dumps(frame)
