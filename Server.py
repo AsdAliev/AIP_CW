@@ -6,8 +6,9 @@ import imutils
 import threading
 import pyaudio
 
-# Initialize PyAudio
-CHUNK_SIZE = 1024
+# Initialize PyAudio and constants
+VIDEO_SIZE = 512
+CHUNK_SIZE = 600
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
@@ -74,7 +75,7 @@ def video_stream():
         while vid.isOpened() and client_socket:
             # Receive video
             while len(data) < payload_size:
-                packet = client_socket.recv(4 * 1024)  # 4K
+                packet = client_socket.recv(VIDEO_SIZE)
                 if not packet:
                     break
                 data += packet
@@ -82,7 +83,7 @@ def video_stream():
             data = data[payload_size:]
             msg_size = struct.unpack("Q", packed_msg_size)[0]
             while len(data) < msg_size:
-                data += client_socket.recv(4 * 1024)
+                data += client_socket.recv(VIDEO_SIZE)
             frame_data = data[:msg_size]
             data = data[msg_size:]
             frame = pickle.loads(frame_data)
