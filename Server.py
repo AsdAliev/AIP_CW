@@ -7,14 +7,14 @@ import threading
 import pyaudio
 import wave
 import keyboard
-import numpy as np
+from pydub import AudioSegment
+
 # Initialize PyAudio and constants
 VIDEO_SIZE = 512
-CHUNK_SIZE = 600
+CHUNK_SIZE = 5000
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 44100
-THRESHOLD = 10000
 p = pyaudio.PyAudio()
 wave_files = ['wave000.wav', 'wave001.wav', 'wave010.wav', 'wave011.wav', 'wave100.wav', 'wave101.wav', 'wave110.wav', 'wave111.wav']
 
@@ -41,55 +41,43 @@ client_socket_audio, addr_audio = server_socket_audio.accept()
 print('GOT (audio) CONNECTION FROM:', addr_audio)
 
 
+def mix_sound(data, filename):
+    with wave.open("output.wav", "wb") as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(data)
+
+    sound1 = AudioSegment.from_file("output.wav")
+    sound2 = AudioSegment.from_file(filename)
+    combined = sound1.overlay(sound2)
+
+    data = combined.raw_data
+    return data
+
+
 def send_audio():
-    current_wave_file = None
-    add_wave_file = False
     while True:
         # Read audio data from the microphone stream
         data = stream_in.read(CHUNK_SIZE)
 
+        # mix high frequency sound from file
         if keyboard.is_pressed('1'):
-            current_wave_file = wave_files[0]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
+            data = mix_sound(data, wave_files[0])
         elif keyboard.is_pressed('2'):
-            current_wave_file = wave_files[1]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
+            data = mix_sound(data, wave_files[1])
         elif keyboard.is_pressed('3'):
-            current_wave_file = wave_files[2]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
+            data = mix_sound(data, wave_files[2])
         elif keyboard.is_pressed('4'):
-            current_wave_file = wave_files[3]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
+            data = mix_sound(data, wave_files[3])
         elif keyboard.is_pressed('5'):
-            current_wave_file = wave_files[4]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
+            data = mix_sound(data, wave_files[4])
         elif keyboard.is_pressed('6'):
-            current_wave_file = wave_files[5]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
+            data = mix_sound(data, wave_files[5])
         elif keyboard.is_pressed('7'):
-            current_wave_file = wave_files[6]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
+            data = mix_sound(data, wave_files[6])
         elif keyboard.is_pressed('8'):
-            current_wave_file = wave_files[7]
-            add_wave_file = True
-            print(f'Selected wave file: {current_wave_file}')
-
-        if add_wave_file:
-            wf = wave.open(current_wave_file, 'rb')
-            wave_data = wf.readframes(CHUNK_SIZE)
-            wave_data = bytearray(wave_data)
-            for i in range(min(len(wave_data), len(data))):
-                wave_data[i] = min(255, wave_data[i] + data[i])
-            data = bytes(wave_data)
-
-        add_wave_file = False
+            data = mix_sound(data, wave_files[7])
 
         # Send audio data to the client
         client_socket_audio.sendall(data)

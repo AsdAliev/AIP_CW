@@ -5,11 +5,14 @@ import struct
 import imutils
 import threading
 import pyaudio
+import numpy as np
+from scipy.signal import butter, filtfilt
 
 # Initialize PyAudio and constants
 VIDEO_SIZE = 512
-CHUNK_SIZE = 600
+CHUNK_SIZE = 5000
 FORMAT = pyaudio.paInt16
+CUTOFF_FREQ = 5000
 CHANNELS = 1
 RATE = 44100
 p = pyaudio.PyAudio()
@@ -32,6 +35,45 @@ client_socket_audio.connect(socket_address_audio)
 print("CLIENT CONNECTED TO", socket_address_audio)
 
 
+def low_pass_filter(data, cutoff_freq, sample_rate):
+    # Преобразование байт в массив чисел
+    data = np.frombuffer(data, dtype=np.int16)
+
+    # Нормализация данных
+    data_norm = data / (2 ** 15)
+
+    # Расчет параметров фильтра
+    nyquist_freq = 0.5 * sample_rate
+    normal_cutoff_freq = cutoff_freq / nyquist_freq
+    order = 5
+
+    # Создание фильтра Butterworth
+    b, a = butter(order, normal_cutoff_freq, btype='lowpass', analog=False)
+
+    # Фильтрация данных
+    data_filtered = filtfilt(b, a, data_norm)
+
+    # Нормализация отфильтрованных данных
+    data_filtered_norm = data_filtered * (2 ** 15)
+
+    # Преобразование отфильтрованных данных в байты
+    data_filtered_bytes = data_filtered_norm.astype(np.int16).tobytes()
+
+    return data_filtered_bytes
+
+
+def band_pass_filter(data, sample_rate, lowcut, highcut):
+    nyquist_rate = sample_rate / 2
+    low = lowcut / nyquist_rate
+    high = highcut / nyquist_rate
+    order = 5
+    b, a = butter(order, [low, high], btype='band', analog=False)
+    y = np.frombuffer(data, dtype='int16')
+    filtered_y = filtfilt(b, a, y)
+    filtered_data = filtered_y.astype('int16').tobytes()
+    return filtered_data
+
+
 def send_audio():
     while True:
         # Read audio data from the microphone stream
@@ -44,6 +86,11 @@ def receive_audio():
     while True:
         # Receive audio data from the server
         data = client_socket_audio.recv(CHUNK_SIZE)
+
+        data_for_commands = band_pass_filter(data, RATE, 6900, 7100)
+
+        data = low_pass_filter(data, CUTOFF_FREQ, RATE)
+        
         # Play audio data on the speaker stream
         stream_out.write(data)
 
