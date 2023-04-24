@@ -76,23 +76,29 @@ def band_pass_filter(data, sample_rate, lowcut, highcut):
 
 def send_audio():
     while True:
-        # Read audio data from the microphone stream
-        data = stream_in.read(CHUNK_SIZE)
-        # Send audio data to the client
-        client_socket_audio.sendall(data)
+        if client_socket_audio:
+            # Read audio data from the microphone stream
+            data = stream_in.read(CHUNK_SIZE)
+            # Send audio data to the client
+            client_socket_audio.sendall(data)
+        else:
+            break
 
 
 def receive_audio():
     while True:
-        # Receive audio data from the server
-        data = client_socket_audio.recv(CHUNK_SIZE)
+        if client_socket_audio:
+            # Receive audio data from the server
+            data = client_socket_audio.recv(CHUNK_SIZE)
 
-        data_for_commands = band_pass_filter(data, RATE, 6900, 7100)
+            data_for_commands = band_pass_filter(data, RATE, 6900, 7100)
 
-        data = low_pass_filter(data, CUTOFF_FREQ, RATE)
-        
-        # Play audio data on the speaker stream
-        stream_out.write(data)
+            data = low_pass_filter(data, CUTOFF_FREQ, RATE)
+
+            # Play audio data on the speaker stream
+            stream_out.write(data)
+        else:
+            break
 
 
 def video_stream():
@@ -108,35 +114,38 @@ def video_stream():
 
         data = b""
         payload_size = struct.calcsize("Q")
-        while vid.isOpened() and client_socket:
-            # Send video
-            img, frame = vid.read()
-            frame = imutils.resize(frame, width=320)
-            a = pickle.dumps(frame)
-            message = struct.pack("Q", len(a)) + a
-            client_socket.sendall(message)
-            cv2.imshow("TRANSMITTING VIDEO", frame)
-            # Receive video
-            while len(data) < payload_size:
-                packet = client_socket.recv(VIDEO_SIZE)
-                if not packet:
-                    break
-                data += packet
-            packed_msg_size = data[:payload_size]
-            data = data[payload_size:]
-            msg_size = struct.unpack("Q", packed_msg_size)[0]
-            while len(data) < msg_size:
-                data += client_socket.recv(VIDEO_SIZE)
-            frame_data = data[:msg_size]
-            data = data[msg_size:]
-            frame = pickle.loads(frame_data)
-            cv2.imshow("RECEIVING VIDEO", frame)
+        while vid.isOpened():
+            if client_socket:
+                # Send video
+                img, frame = vid.read()
+                frame = imutils.resize(frame, width=320)
+                a = pickle.dumps(frame)
+                message = struct.pack("Q", len(a)) + a
+                client_socket.sendall(message)
+                cv2.imshow("TRANSMITTING VIDEO", frame)
+                # Receive video
+                while len(data) < payload_size:
+                    packet = client_socket.recv(VIDEO_SIZE)
+                    if not packet:
+                        break
+                    data += packet
+                packed_msg_size = data[:payload_size]
+                data = data[payload_size:]
+                msg_size = struct.unpack("Q", packed_msg_size)[0]
+                while len(data) < msg_size:
+                    data += client_socket.recv(VIDEO_SIZE)
+                frame_data = data[:msg_size]
+                data = data[msg_size:]
+                frame = pickle.loads(frame_data)
+                cv2.imshow("RECEIVING VIDEO", frame)
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                client_socket.close()
-                print("You entered 'q'")
-                exit(1)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    client_socket.close()
+                    print("You entered 'q'")
+                    exit(1)
+            else:
+                break
 
 
 t1 = threading.Thread(target=receive_audio, args=())
